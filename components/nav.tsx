@@ -24,6 +24,12 @@ export default function Nav() {
             All Tasks
           </Link>
           <Link
+            href="/targets"
+            className="rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            Targets
+          </Link>
+          <Link
             href="/test"
             className="rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
