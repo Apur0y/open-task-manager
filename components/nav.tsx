@@ -8,20 +8,20 @@ export default function Nav() {
           href="/"
           className="text-lg font-bold text-neutral-900 dark:text-neutral-100"
         >
-          ✓ Task Tracker
+          ✓ Study Tracker
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link
             href="/"
             className="rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Today
+            Study
           </Link>
           <Link
-            href="/all"
+            href="/history"
             className="rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            All Tasks
+            History
           </Link>
           <Link
             href="/targets"
@@ -46,4 +46,3 @@ export default function Nav() {
     </header>
   );
 }
-//
