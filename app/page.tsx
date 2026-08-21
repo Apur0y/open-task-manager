@@ -22,15 +22,7 @@ export default async function StudyHomePage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-          Study Tracker
-        </h1>
-        <span className="text-sm text-neutral-500 dark:text-neutral-400">
-          Time is tracked on the server
-        </span>
-      </div>
+    <main className="mx-auto w-full max-w-lg flex-1 px-4 py-5">
       <StudyClient initialActive={active} dbError={dbError} />
     </main>
   );

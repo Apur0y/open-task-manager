@@ -19,28 +19,28 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:items-center"
       onClick={busy ? undefined : onCancel}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
+        className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+        <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
           {title}
         </h3>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
           {message}
         </p>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex gap-2">
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            className="flex h-12 flex-1 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
             Cancel
           </button>
@@ -48,9 +48,9 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+            className="flex h-12 flex-1 items-center justify-center rounded-xl bg-red-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-red-500 active:scale-[0.97] disabled:opacity-50"
           >
-            {busy ? "Deleting..." : confirmLabel}
+            {busy ? "Deleting…" : confirmLabel}
           </button>
         </div>
       </div>

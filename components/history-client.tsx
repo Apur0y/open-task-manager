@@ -16,6 +16,12 @@ import {
 } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function weekdayLetter(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return WEEKDAY_LETTERS[new Date(y, (m ?? 1) - 1, d ?? 1).getDay()];
+}
 
 interface HistoryClientProps {
   fallbackDate: string;
@@ -124,58 +130,58 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
   };
 
   return (
-    <div className="space-y-8">
-      <section className="flex flex-wrap items-end gap-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+    <div className="space-y-6">
+      <section className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1 block px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Date
-          </label>
+          </span>
           <input
             type="date"
             value={date}
             onChange={(e) => {
               if (DATE_RE.test(e.target.value)) navigate(e.target.value, compare);
             }}
-            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-surface px-3 text-[15px] text-neutral-900 dark:border-neutral-700 dark:text-neutral-100"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            Compare with
-          </label>
+        </label>
+        <label className="block">
+          <span className="mb-1 block px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Compare
+          </span>
           <input
             type="date"
             value={compare}
             onChange={(e) => navigate(date, e.target.value)}
-            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-surface px-3 text-[15px] text-neutral-900 dark:border-neutral-700 dark:text-neutral-100"
           />
-        </div>
-        {compare ? (
+        </label>
+        {!compare ? (
           <button
             type="button"
-            onClick={() => navigate(date, "")}
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            onClick={() => navigate(date, lastNDates(2)[0])}
+            className="col-span-2 flex min-h-11 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Clear comparison
+            Compare with yesterday
           </button>
         ) : (
           <button
             type="button"
-            onClick={() => navigate(date, lastNDates(2)[0])}
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            onClick={() => navigate(date, "")}
+            className="col-span-2 flex min-h-11 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Compare with yesterday
+            Clear comparison ({compare})
           </button>
         )}
       </section>
 
       {error && (
-        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+        <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           {error}
         </div>
       )}
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3">
         <StatCard label="Total" value={formatDuration(dayStats.totalSeconds)} />
         <StatCard label="Sessions" value={String(dayStats.sessionCount)} />
         <StatCard label="Avg session" value={formatDuration(dayStats.avgSeconds)} />
@@ -185,15 +191,15 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
       {compareStats && <ComparisonCard a={dayStats} b={compareStats} />}
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          Session Timeline
+        <h2 className="mb-2 px-1 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Session timeline
         </h2>
         {loading ? (
-          <p className="rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+          <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
             Loading sessions…
           </p>
         ) : daySessions.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+          <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
             No study sessions on this date.
           </p>
         ) : (
@@ -230,17 +236,17 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
               ) : (
                 <li
                   key={s._id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
+                  className="flex min-h-14 items-center justify-between gap-2 rounded-2xl border border-neutral-200/80 bg-surface px-4 py-2.5"
                 >
-                  <span className="font-mono tabular-nums text-neutral-700 dark:text-neutral-300">
-                    {formatTimeOfDay(s.startAt, s.timezone)} →{" "}
-                    {s.endAt ? formatTimeOfDay(s.endAt, s.timezone) : "…running"}
-                  </span>
-                  <span className="flex items-center gap-3">
+                  <span className="flex flex-col">
+                    <span className="font-mono text-[15px] tabular-nums text-neutral-800 dark:text-neutral-200">
+                      {formatTimeOfDay(s.startAt, s.timezone)} →{" "}
+                      {s.endAt ? formatTimeOfDay(s.endAt, s.timezone) : "…"}
+                    </span>
                     <span
-                      className={`font-semibold tabular-nums ${
+                      className={`text-xs font-bold tabular-nums ${
                         s.endAt
-                          ? "text-neutral-900 dark:text-neutral-100"
+                          ? "text-neutral-500 dark:text-neutral-400"
                           : "text-emerald-600 dark:text-emerald-400"
                       }`}
                     >
@@ -248,25 +254,55 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                         ? formatDuration(s.durationSeconds ?? 0)
                         : "in progress"}
                     </span>
-                    {s.endAt && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(s._id)}
-                          className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingSession(s)}
-                          className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
                   </span>
+                  {s.endAt ? (
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={`Edit session ${formatTimeOfDay(s.startAt, s.timezone)}`}
+                        onClick={() => setEditingId(s._id)}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-300 text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4.5 w-4.5"
+                          aria-hidden="true"
+                        >
+                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete session ${formatTimeOfDay(s.startAt, s.timezone)}`}
+                        onClick={() => setDeletingSession(s)}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 text-red-600 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4.5 w-4.5"
+                          aria-hidden="true"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      live
+                    </span>
+                  )}
                 </li>
               )
             )}
@@ -275,19 +311,19 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            Last 7 Days
+        <div className="mb-2 flex items-baseline justify-between px-1">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Last 7 days
           </h2>
-          <span className="text-sm text-neutral-500 dark:text-neutral-400">
-            Week total:{" "}
-            <span className="font-semibold text-neutral-900 dark:text-neutral-100">
+          <span className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+            Week:{" "}
+            <span className="font-bold text-neutral-800 dark:text-neutral-200">
               {formatDuration(weekTotal)}
             </span>
           </span>
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="flex h-40 items-end justify-between gap-2">
+        <div className="rounded-2xl border border-neutral-200/80 bg-surface p-4 pt-3">
+          <div className="flex h-44 items-end justify-between gap-2">
             {trendDays.map((d) => {
               const pct = Math.round((d.totalSeconds / maxTrendSeconds) * 100);
               const isSelected = d.date === date;
@@ -303,7 +339,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                     {formatDuration(d.totalSeconds)}
                   </span>
                   <div
-                    className={`w-full rounded-t-md transition-colors ${
+                    className={`w-full rounded-lg transition-colors ${
                       isSelected
                         ? "bg-emerald-500"
                         : "bg-emerald-200 group-hover:bg-emerald-300 dark:bg-emerald-900 dark:group-hover:bg-emerald-800"
@@ -311,13 +347,16 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                     style={{ height: `${Math.max(pct, d.totalSeconds > 0 ? 8 : 2)}%` }}
                   />
                   <span
-                    className={`text-[10px] tabular-nums ${
+                    className={`flex flex-col items-center leading-tight ${
                       isSelected
                         ? "font-bold text-emerald-600 dark:text-emerald-400"
                         : "text-neutral-500 dark:text-neutral-400"
                     }`}
                   >
-                    {d.date.slice(8)}/{d.date.slice(5, 7)}
+                    <span className="text-[10px]">{weekdayLetter(d.date)}</span>
+                    <span className="text-[9px] tabular-nums opacity-70">
+                      {d.date.slice(8)}
+                    </span>
                   </span>
                 </button>
               );
@@ -346,8 +385,8 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4 text-center dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+    <div className="rounded-2xl border border-neutral-200/80 bg-surface p-4 text-center">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {label}
       </div>
       <div className="mt-1 text-xl font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
@@ -366,25 +405,25 @@ function ComparisonCard({ a, b }: { a: DayStats; b: DayStats }) {
         ? `${formatDuration(diffSeconds)} more than ${b.date}`
         : `${formatDuration(-diffSeconds)} less than ${b.date}`;
   return (
-    <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-      <h2 className="mb-3 text-base font-semibold text-neutral-900 dark:text-neutral-100">
+    <section className="rounded-2xl border border-neutral-200/80 bg-surface p-4">
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         Comparison
       </h2>
-      <div className="grid grid-cols-3 gap-3 text-center text-sm">
+      <div className="grid grid-cols-3 gap-2 text-center text-sm">
         <div>
-          <div className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             {a.date}
           </div>
           <div className="mt-1 font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
             {formatDuration(a.totalSeconds)}
           </div>
-          <div className="text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
             {a.sessionCount} sessions
           </div>
         </div>
         <div className="flex flex-col items-center justify-center">
           <div
-            className={`font-semibold tabular-nums ${
+            className={`font-bold tabular-nums ${
               diffSeconds > 0
                 ? "text-emerald-600 dark:text-emerald-400"
                 : diffSeconds < 0
@@ -395,18 +434,18 @@ function ComparisonCard({ a, b }: { a: DayStats; b: DayStats }) {
             {diffSeconds === 0 ? "=" : diffSeconds > 0 ? "+" : "−"}
             {formatDuration(Math.abs(diffSeconds))}
           </div>
-          <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="mt-1 text-[11px] leading-tight text-neutral-500 dark:text-neutral-400">
             {diffLabel}
           </div>
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             {b.date}
           </div>
           <div className="mt-1 font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
             {formatDuration(b.totalSeconds)}
           </div>
-          <div className="text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
             {b.sessionCount} sessions
           </div>
         </div>
@@ -458,64 +497,64 @@ function EditSessionRow({
   };
 
   return (
-    <div className="rounded-xl border border-emerald-300 bg-white p-4 dark:border-emerald-800 dark:bg-neutral-900">
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+    <div className="space-y-3 rounded-2xl border-2 border-emerald-500/60 bg-surface p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Start
-          </label>
+          </span>
           <input
             type="datetime-local"
             value={startValue}
             onChange={(e) => setStartValue(e.target.value)}
-            className="rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             End
-          </label>
+          </span>
           <input
             type="datetime-local"
             value={endValue}
             onChange={(e) => setEndValue(e.target.value)}
-            className="rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
           />
-        </div>
-        <div className="pb-1.5 text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
-          {previewDuration !== null ? (
-            <>
-              New duration:{" "}
-              <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-                {formatDuration(previewDuration)}
-              </span>
-            </>
-          ) : (
-            "Invalid range"
-          )}
-        </div>
-        <div className="ml-auto flex gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={busy || previewDuration === null}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {busy ? "Saving..." : "Save"}
-          </button>
-        </div>
+        </label>
+      </div>
+      <div className="text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
+        {previewDuration !== null ? (
+          <>
+            New duration:{" "}
+            <span className="font-bold text-neutral-900 dark:text-neutral-100">
+              {formatDuration(previewDuration)}
+            </span>
+          </>
+        ) : (
+          <span className="text-red-600 dark:text-red-400">Invalid time range</span>
+        )}
       </div>
       {localError && (
-        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{localError}</p>
+        <p className="text-xs text-red-600 dark:text-red-400">{localError}</p>
       )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="flex h-12 flex-1 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy || previewDuration === null}
+          className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
+        >
+          {busy ? "Saving…" : "Save changes"}
+        </button>
+      </div>
     </div>
   );
 }

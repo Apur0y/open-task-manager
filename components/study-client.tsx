@@ -144,7 +144,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
 
   if (dbError) {
     return (
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
         {dbError}
       </div>
     );
@@ -157,13 +157,23 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
   const totalToday = finishedTotal + (activeCountsToday ? elapsedSeconds : 0);
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-2xl border border-neutral-200 bg-white p-8 text-center shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <p className="text-sm font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          {active ? "Session in progress" : "Ready to study?"}
-        </p>
+    <div className="space-y-6">
+      <section className="rounded-3xl border border-neutral-200/80 bg-surface px-5 pb-5 pt-8 shadow-sm">
+        <div className="flex items-center justify-center gap-2">
+          <span
+            className={`inline-block h-2.5 w-2.5 rounded-full ${
+              active
+                ? "animate-pulse bg-emerald-500"
+                : "bg-neutral-300 dark:bg-neutral-700"
+            }`}
+          />
+          <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+            {active ? "Studying" : "Ready"}
+          </p>
+        </div>
+
         <div
-          className={`mt-4 font-mono text-6xl font-bold tabular-nums sm:text-7xl ${
+          className={`mt-4 text-center font-mono text-[3.75rem] font-bold leading-none tabular-nums sm:text-7xl ${
             active
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-neutral-900 dark:text-neutral-100"
@@ -171,75 +181,101 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
         >
           {formatClock(elapsedSeconds)}
         </div>
-        <p className="mt-3 h-5 text-sm text-neutral-500 dark:text-neutral-400">
+
+        <p className="mt-4 min-h-5 text-center text-sm text-neutral-500 dark:text-neutral-400">
           {active
-            ? `Started at ${formatTimeOfDay(active.startAt, active.timezone)}${
-                active.localDate !== today ? ` (${active.localDate})` : ""
+            ? `Started ${formatTimeOfDay(active.startAt, active.timezone)}${
+                active.localDate !== today ? ` · ${active.localDate}` : ""
               }`
-            : "Elapsed time is stored server-side and survives refreshes"}
+            : "Time is counted on the server — safe to close the app"}
         </p>
 
         {error && (
-          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-center text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
             {error}
           </p>
         )}
 
-        <div className="mt-6 flex items-center justify-center gap-3">
-          {!active ? (
+        {!active ? (
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={busy}
+            className="mt-6 flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-bold text-white shadow-lg shadow-emerald-600/25 transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-60"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="h-6 w-6"
+              aria-hidden="true"
+            >
+              <path d="M8 5.14v14l11-7-11-7z" />
+            </svg>
+            {busy ? "Starting…" : "Start Studying"}
+          </button>
+        ) : (
+          <div className="mt-6 space-y-3">
             <button
               type="button"
-              onClick={handleStart}
+              onClick={handleStop}
               disabled={busy}
-              className="rounded-xl bg-emerald-600 px-10 py-3 text-base font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
+              className="flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 text-lg font-bold text-white shadow-lg shadow-red-600/25 transition-transform duration-100 hover:bg-red-500 active:scale-[0.97] disabled:opacity-60"
             >
-              {busy ? "Starting..." : "Start Studying"}
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="h-5 w-5"
+                aria-hidden="true"
+              >
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              {busy ? "Stopping…" : "Stop & Save"}
             </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleStop}
-                disabled={busy}
-                className="rounded-xl bg-red-600 px-10 py-3 text-base font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50"
-              >
-                {busy ? "Stopping..." : "Stop"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDiscard(true)}
-                disabled={busy}
-                className="rounded-xl border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
-              >
-                Discard
-              </button>
-            </>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => setConfirmDiscard(true)}
+              disabled={busy}
+              className="flex h-11 w-full items-center justify-center rounded-2xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            >
+              Discard session
+            </button>
+          </div>
+        )}
 
         {elapsedSeconds > LONG_SESSION_WARNING_SECONDS && (
-          <p className="mt-4 text-xs text-amber-600 dark:text-amber-400">
-            This session has been running for a very long time. If you forgot to
-            stop it earlier, use Discard or edit it later in History.
+          <p className="mt-4 text-center text-xs text-amber-600 dark:text-amber-400">
+            Running for a very long time — forgot to stop it earlier? Discard it
+            or fix the time in History.
           </p>
         )}
       </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            Today&apos;s Sessions
-          </h2>
-          <span className="text-sm text-neutral-500 dark:text-neutral-400">
-            Total:{" "}
-            <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-              {formatDuration(totalToday)}
-            </span>
-          </span>
+      <section className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-neutral-200/80 bg-surface p-4 text-center">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Today total
+          </div>
+          <div className="mt-1 text-2xl font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+            {formatDuration(totalToday)}
+          </div>
         </div>
+        <div className="rounded-2xl border border-neutral-200/80 bg-surface p-4 text-center">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Sessions
+          </div>
+          <div className="mt-1 text-2xl font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+            {completed.length + (activeCountsToday ? 1 : 0)}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 px-1 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Today&apos;s sessions
+        </h2>
         {todays.length === 0 && !activeCountsToday ? (
-          <p className="rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-            No study sessions yet today. Press Start when you begin.
+          <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+            No sessions yet today. Tap Start when you begin.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -249,14 +285,14 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             ).map((s) => (
               <li
                 key={s._id}
-                className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
+                className="flex min-h-14 items-center justify-between rounded-2xl border border-neutral-200/80 bg-surface px-4 py-2.5"
               >
-                <span className="font-mono tabular-nums text-neutral-700 dark:text-neutral-300">
+                <span className="font-mono text-[15px] tabular-nums text-neutral-700 dark:text-neutral-300">
                   {formatTimeOfDay(s.startAt, s.timezone)} →{" "}
-                  {s.endAt ? formatTimeOfDay(s.endAt, s.timezone) : "…running"}
+                  {s.endAt ? formatTimeOfDay(s.endAt, s.timezone) : "…"}
                 </span>
                 <span
-                  className={`font-semibold tabular-nums ${
+                  className={`ml-3 whitespace-nowrap font-bold tabular-nums ${
                     s.endAt
                       ? "text-neutral-900 dark:text-neutral-100"
                       : "text-emerald-600 dark:text-emerald-400"
@@ -270,14 +306,15 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             ))}
           </ul>
         )}
-        <div className="mt-4 text-right">
-          <Link
-            href="/history"
-            className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-          >
-            View full history &amp; statistics →
-          </Link>
-        </div>
+        <Link
+          href="/history"
+          className="mt-3 flex min-h-12 items-center justify-between rounded-2xl border border-neutral-200/80 bg-surface px-4 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-surface dark:text-neutral-200 dark:hover:bg-neutral-800"
+        >
+          History &amp; statistics
+          <span aria-hidden="true" className="text-neutral-400">
+            ›
+          </span>
+        </Link>
       </section>
 
       {confirmDiscard && (
