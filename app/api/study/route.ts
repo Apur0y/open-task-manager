@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
+  createSession,
   getActiveSession,
   getSessionsBetween,
   isValidIsoDate,
+  isValidIsoTimestamp,
   isValidTimezone,
   startSession,
 } from "@/lib/study";
@@ -49,12 +51,33 @@ export async function POST(request: Request) {
     } catch {
       body = {};
     }
-    const timezone = (body as { timezone?: unknown }).timezone;
+    const { timezone, startAt, endAt } = body as {
+      timezone?: unknown;
+      startAt?: unknown;
+      endAt?: unknown;
+    };
     if (!isValidTimezone(timezone)) {
       return NextResponse.json(
         { error: "A valid IANA timezone is required" },
         { status: 400 }
       );
+    }
+
+    if (startAt !== undefined || endAt !== undefined) {
+      if (!isValidIsoTimestamp(startAt) || !isValidIsoTimestamp(endAt)) {
+        return NextResponse.json(
+          { error: "startAt and endAt must be valid ISO timestamps" },
+          { status: 400 }
+        );
+      }
+      const session = await createSession({ startAt, endAt, timezone });
+      if (!session) {
+        return NextResponse.json(
+          { error: "endAt must be after startAt" },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json(session, { status: 201 });
     }
 
     const active = await getActiveSession();

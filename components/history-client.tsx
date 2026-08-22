@@ -13,6 +13,7 @@ import {
   isoToLocalInputValue,
   lastNDates,
   localInputValueToIso,
+  todayString,
 } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,8 +44,13 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
   const [loadedKey, setLoadedKey] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [deletingSession, setDeletingSession] = useState<StudySession | null>(null);
   const [busy, setBusy] = useState(false);
+  const timezone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    []
+  );
 
   const navigate = useCallback(
     (nextDate: string, nextCompare: string) => {
@@ -191,9 +197,73 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
       {compareStats && <ComparisonCard a={dayStats} b={compareStats} />}
 
       <section>
-        <h2 className="mb-2 px-1 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          Session timeline
-        </h2>
+        <div className="mb-2 flex items-center justify-between px-1">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Session timeline
+          </h2>
+          {!adding && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(true);
+                setEditingId(null);
+              }}
+              className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              Add session
+            </button>
+          )}
+        </div>
+        {adding && (
+          <div className="mb-2">
+            <AddSessionRow
+              key={date}
+              date={date}
+              busy={busy}
+              onCancel={() => setAdding(false)}
+              onSave={async (startIso, endIso) => {
+                setBusy(true);
+                try {
+                  const res = await fetch("/api/study", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      timezone,
+                      startAt: startIso,
+                      endAt: endIso,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    setError(body.error || "Failed to add session");
+                    return;
+                  }
+                  const created = (await res.json()) as StudySession;
+                  setError(undefined);
+                  setAdding(false);
+                  if (created.localDate !== date) {
+                    navigate(created.localDate, compare);
+                  }
+                  setLoadedKey("");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          </div>
+        )}
         {loading ? (
           <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
             Loading sessions…
@@ -451,6 +521,121 @@ function ComparisonCard({ a, b }: { a: DayStats; b: DayStats }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function AddSessionRow({
+  date,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  date: string;
+  busy: boolean;
+  onSave: (startIso: string, endIso: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const defaults = useMemo(() => {
+    const isToday = date === todayString();
+    if (isToday) {
+      const now = new Date();
+      return {
+        start: isoToLocalInputValue(
+          new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+        ),
+        end: isoToLocalInputValue(now.toISOString()),
+      };
+    }
+    return { start: `${date}T09:00`, end: `${date}T10:00` };
+  }, [date]);
+
+  const [startValue, setStartValue] = useState(defaults.start);
+  const [endValue, setEndValue] = useState(defaults.end);
+  const [localError, setLocalError] = useState<string | undefined>();
+
+  const previewDuration = useMemo(() => {
+    const s = localInputValueToIso(startValue);
+    const e = localInputValueToIso(endValue);
+    if (!s || !e) return null;
+    const seconds = Math.round((Date.parse(e) - Date.parse(s)) / 1000);
+    return seconds > 0 ? seconds : null;
+  }, [startValue, endValue]);
+
+  const handleSave = async () => {
+    const startIso = localInputValueToIso(startValue);
+    const endIso = localInputValueToIso(endValue);
+    if (!startIso || !endIso) {
+      setLocalError("Both start and end times are required.");
+      return;
+    }
+    if (previewDuration === null) {
+      setLocalError("End time must be after start time.");
+      return;
+    }
+    setLocalError(undefined);
+    await onSave(startIso, endIso);
+  };
+
+  return (
+    <div className="space-y-3 rounded-2xl border-2 border-emerald-500/60 bg-surface p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Start
+          </span>
+          <input
+            type="datetime-local"
+            value={startValue}
+            onChange={(e) => setStartValue(e.target.value)}
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            End
+          </span>
+          <input
+            type="datetime-local"
+            value={endValue}
+            onChange={(e) => setEndValue(e.target.value)}
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          />
+        </label>
+      </div>
+      <div className="text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
+        {previewDuration !== null ? (
+          <>
+            Duration:{" "}
+            <span className="font-bold text-neutral-900 dark:text-neutral-100">
+              {formatDuration(previewDuration)}
+            </span>
+          </>
+        ) : (
+          <span className="text-red-600 dark:text-red-400">Invalid time range</span>
+        )}
+      </div>
+      {localError && (
+        <p className="text-xs text-red-600 dark:text-red-400">{localError}</p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="flex h-12 flex-1 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy || previewDuration === null}
+          className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
+        >
+          {busy ? "Adding…" : "Add session"}
+        </button>
+      </div>
+    </div>
   );
 }
 

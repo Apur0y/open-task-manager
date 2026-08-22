@@ -126,6 +126,39 @@ export async function startSession(timezone: string): Promise<StudySession> {
   return toStudySession(doc);
 }
 
+export interface CreateSessionInput {
+  startAt: string;
+  endAt: string;
+  timezone: string;
+}
+
+export async function createSession(
+  input: CreateSessionInput
+): Promise<StudySession | null> {
+  const { startAt, endAt, timezone } = input;
+  const startMs = new Date(startAt).getTime();
+  const endMs = new Date(endAt).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+    return null;
+  }
+
+  const col = await getStudySessionsCollection();
+  const nowIso = new Date().toISOString();
+  const doc: MongoStudySession = {
+    _id: new ObjectId(),
+    userId: DEFAULT_USER_ID,
+    startAt,
+    endAt,
+    durationSeconds: Math.max(0, Math.round((endMs - startMs) / 1000)),
+    localDate: localDateInTz(new Date(startMs), timezone),
+    timezone,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  await col.insertOne(doc);
+  return toStudySession(doc);
+}
+
 export async function stopActiveSession(
   userId: string = DEFAULT_USER_ID
 ): Promise<StudySession | null> {
