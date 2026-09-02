@@ -2,6 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  Search,
+  ExternalLink,
+  Star,
+  CheckCircle2,
+  Newspaper,
+  Loader2,
+  Bookmark,
+  Eye,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
+import {
   BriefingArticle,
   DailyBriefing,
   NewsArticle,
@@ -213,7 +225,8 @@ export default function NewsClient({
 
   if (dbError) {
     return (
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         {dbError}
       </div>
     );
@@ -241,9 +254,10 @@ export default function NewsClient({
       )}
 
       {loading && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+        <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Loading…
-        </p>
+        </div>
       )}
 
       {tab === "briefing" ? (
@@ -314,14 +328,16 @@ function CollectBar({
   return (
     <div className="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium text-neutral-700 dark:text-neutral-200">
+        <span className="flex items-center gap-1.5 font-medium text-neutral-700 dark:text-neutral-200">
+          <Newspaper className="h-4 w-4" aria-hidden="true" />
           Collect news
         </span>
         <button
           onClick={() => onRun()}
           disabled={collecting}
-          className="rounded-lg bg-neutral-900 px-3 py-1.5 font-medium text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
+          className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 font-medium text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
         >
+          {collecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Newspaper className="h-3.5 w-3.5" />}
           {collecting ? "Collecting…" : "Run all sources"}
         </button>
         <button
@@ -349,26 +365,30 @@ function CollectBar({
 }
 
 function Tabs({ tab, onTabChange }: { tab: Tab; onTabChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "latest", label: "Latest" },
-    { id: "important", label: "Important / Saved" },
-    { id: "briefing", label: "Daily Briefing" },
+  const tabs: { id: Tab; label: string; icon: typeof Newspaper }[] = [
+    { id: "latest", label: "Latest", icon: Clock },
+    { id: "important", label: "Important / Saved", icon: Star },
+    { id: "briefing", label: "Daily Briefing", icon: Newspaper },
   ];
   return (
     <div className="flex flex-wrap gap-1 border-b border-neutral-200 dark:border-neutral-800">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          onClick={() => onTabChange(t.id)}
-          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-            tab === t.id
-              ? "border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100"
-              : "border-transparent text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+      {tabs.map((t) => {
+        const Icon = t.icon;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onTabChange(t.id)}
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
+              tab === t.id
+                ? "border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100"
+                : "border-transparent text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+            }`}
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -386,13 +406,16 @@ function FilterBar({
   return (
     <div className="space-y-3 rounded-xl border border-neutral-200 p-4 text-sm dark:border-neutral-800">
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          value={filters.q}
-          onChange={(e) => onChange("q", e.target.value)}
-          placeholder="Search title or summary…"
-          className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-transparent px-3 py-1.5 text-neutral-900 outline-none focus:border-neutral-500 dark:border-neutral-700 dark:text-neutral-100"
-        />
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-neutral-500" aria-hidden="true" />
+          <input
+            type="search"
+            value={filters.q}
+            onChange={(e) => onChange("q", e.target.value)}
+            placeholder="Search title or summary…"
+            className="w-full rounded-lg border border-neutral-300 bg-transparent py-1.5 pl-8 pr-3 text-neutral-900 outline-none focus:border-neutral-500 dark:border-neutral-700 dark:text-neutral-100"
+          />
+        </div>
         <select
           value={filters.source}
           onChange={(e) => onChange("source", e.target.value)}
@@ -537,25 +560,36 @@ function ArticleCard({
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+              className="flex items-center gap-1 rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
             >
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
               Read original
             </a>
             <button
               onClick={() => onToggleImportant(article)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${
                 article.important
                   ? "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
                   : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300"
               }`}
             >
-              {article.important ? "★ Important" : "☆ Mark important"}
+              {article.important ? (
+                <Bookmark className="h-3 w-3" fill="currentColor" aria-hidden="true" />
+              ) : (
+                <Star className="h-3 w-3" aria-hidden="true" />
+              )}
+              {article.important ? "Important" : "Mark important"}
             </button>
             <button
               onClick={() => onToggleRead(article)}
-              className="rounded-lg px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              {article.read ? "✓ Read" : "Mark read"}
+              {article.read ? (
+                <CheckCircle2 className="h-3 w-3" fill="currentColor" aria-hidden="true" />
+              ) : (
+                <Eye className="h-3 w-3" aria-hidden="true" />
+              )}
+              {article.read ? "Read" : "Mark read"}
             </button>
           </div>
         </div>
@@ -666,15 +700,17 @@ function BriefingCard({
           href={a.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900"
+          className="flex items-center gap-1 rounded-lg bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900"
         >
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
           Read original
         </a>
         <button
           onClick={() => onToggleImportant(a)}
-          className="rounded-lg px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
-          ★ Save
+          <Bookmark className="h-3 w-3" aria-hidden="true" />
+          Save
         </button>
       </div>
     </article>
@@ -683,8 +719,9 @@ function BriefingCard({
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <p className="rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+      <Newspaper className="h-8 w-8 text-neutral-300 dark:text-neutral-600" aria-hidden="true" />
       {text}
-    </p>
+    </div>
   );
 }

@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  Play,
+  Square,
+  Trash2,
+  ChevronRight,
+  BookOpen,
+  AlertTriangle,
+  Loader2,
+} from "lucide-react";
 import ConfirmDialog from "./confirm-dialog";
 import {
   StudySession,
@@ -144,7 +153,8 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
 
   if (dbError) {
     return (
-      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         {dbError}
       </div>
     );
@@ -203,14 +213,11 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             disabled={busy}
             className="mt-6 flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-bold text-white shadow-lg shadow-emerald-600/25 transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-60"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="h-6 w-6"
-              aria-hidden="true"
-            >
-              <path d="M8 5.14v14l11-7-11-7z" />
-            </svg>
+            {busy ? (
+              <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+            ) : (
+              <Play className="h-6 w-6" aria-hidden="true" />
+            )}
             {busy ? "Starting…" : "Start Studying"}
           </button>
         ) : (
@@ -221,22 +228,20 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
               disabled={busy}
               className="flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 text-lg font-bold text-white shadow-lg shadow-red-600/25 transition-transform duration-100 hover:bg-red-500 active:scale-[0.97] disabled:opacity-60"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className="h-5 w-5"
-                aria-hidden="true"
-              >
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
+              {busy ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Square className="h-5 w-5" fill="currentColor" aria-hidden="true" />
+              )}
               {busy ? "Stopping…" : "Stop & Save"}
             </button>
             <button
               type="button"
               onClick={() => setConfirmDiscard(true)}
               disabled={busy}
-              className="flex h-11 w-full items-center justify-center rounded-2xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
             >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
               Discard session
             </button>
           </div>
@@ -274,9 +279,10 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
           Today&apos;s sessions
         </h2>
         {todays.length === 0 && !activeCountsToday ? (
-          <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+            <BookOpen className="h-8 w-8 text-neutral-300 dark:text-neutral-600" aria-hidden="true" />
             No sessions yet today. Tap Start when you begin.
-          </p>
+          </div>
         ) : (
           <ul className="space-y-2">
             {(activeCountsToday && active
@@ -311,9 +317,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
           className="mt-3 flex min-h-12 items-center justify-between rounded-2xl border border-neutral-200/80 bg-surface px-4 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-surface dark:text-neutral-200 dark:hover:bg-neutral-800"
         >
           History &amp; statistics
-          <span aria-hidden="true" className="text-neutral-400">
-            ›
-          </span>
+          <ChevronRight className="h-4 w-4 text-neutral-400" aria-hidden="true" />
         </Link>
       </section>
 

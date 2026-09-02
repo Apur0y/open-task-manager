@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
 
 export default function TopBar() {
   return (
@@ -9,18 +10,7 @@ export default function TopBar() {
           className="flex items-center gap-2 text-base font-bold text-neutral-900 dark:text-neutral-100"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4.5 w-4.5"
-              aria-hidden="true"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+            <Check className="h-4.5 w-4.5" strokeWidth={3} aria-hidden="true" />
           </span>
           Study Tracker
         </Link>

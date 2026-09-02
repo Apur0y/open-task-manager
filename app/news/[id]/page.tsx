@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft, ExternalLink, Calendar } from "lucide-react";
 import ArticleActions from "@/components/article-actions";
 import { getNewsById } from "@/lib/news/store";
 
@@ -54,9 +55,10 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
       <Link
         href="/news"
-        className="mb-4 inline-block text-sm font-medium text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
       >
-        ← Back to news
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back to news
       </Link>
 
       <article>
@@ -79,7 +81,8 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
           {article.title}
         </h1>
 
-        <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-neutral-500 dark:text-neutral-400">
+          <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           Published {formatDate(article.publishedAt)} · Collected{" "}
           {formatDate(article.collectedAt)}
         </p>
@@ -121,9 +124,10 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
             href={article.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+            className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
           >
-            Read original article ↗
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            Read original article
           </a>
         </div>
       </article>

@@ -1,7 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  ArrowLeftRight,
+  X,
+  CalendarClock,
+  Loader2,
+} from "lucide-react";
 import ConfirmDialog from "./confirm-dialog";
 import {
   DayStats,
@@ -62,14 +71,18 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
     [router]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const loadSeqRef = useRef(0);
+
+  const loadData = useCallback(
+    async (key: string, d: string, c: string) => {
+      const seq = ++loadSeqRef.current;
+      const isStale = () => seq !== loadSeqRef.current;
+      const hasCompare = Boolean(c);
       try {
         const trendFrom = lastNDates(7)[0];
         const requests: [Promise<Response>, (data: StudySession[]) => void][] = [
           [
-            fetch(`/api/study?from=${date}&to=${date}`),
+            fetch(`/api/study?from=${d}&to=${d}`),
             (data) => setDaySessions(data),
           ],
           [
@@ -77,31 +90,37 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
             (data) => setTrendSessions(data),
           ],
         ];
-        if (compare) {
+        if (hasCompare) {
           requests.push([
-            fetch(`/api/study?from=${compare}&to=${compare}`),
+            fetch(`/api/study?from=${c}&to=${c}`),
             (data) => setCompareSessions(data),
           ]);
-        } else {
-          setCompareSessions([]);
         }
         const responses = await Promise.all(requests.map(([p]) => p));
-        if (cancelled) return;
+        if (isStale()) return;
         for (let i = 0; i < requests.length; i++) {
           const res = responses[i];
           if (!res.ok) throw new Error(`Request failed: ${res.status}`);
           requests[i][1](await res.json());
         }
+        if (!hasCompare) setCompareSessions([]);
         setError(undefined);
-        setLoadedKey(dataKey);
+        setLoadedKey(key);
       } catch {
-        if (!cancelled) setError("Could not load study data.");
+        if (!isStale()) setError("Could not load study data.");
       }
-    })();
+    },
+    []
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => loadData(dataKey, date, compare), 0);
     return () => {
-      cancelled = true;
+      clearTimeout(timer);
+      loadSeqRef.current += 1;
     };
-  }, [date, compare, dataKey]);
+  }, [dataKey, date, compare, loadData]);
+
 
   const loading = loadedKey !== dataKey;
 
@@ -129,7 +148,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
     try {
       await fetch(`/api/study/${deletingSession._id}`, { method: "DELETE" });
       setDeletingSession(null);
-      setLoadedKey("");
+      await loadData(dataKey, date, compare);
     } finally {
       setBusy(false);
     }
@@ -139,7 +158,8 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
     <div className="space-y-6">
       <section className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="mb-1 block px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          <span className="mb-1 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
             Date
           </span>
           <input
@@ -152,7 +172,8 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          <span className="mb-1 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
             Compare
           </span>
           <input
@@ -166,16 +187,18 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
           <button
             type="button"
             onClick={() => navigate(date, lastNDates(2)[0])}
-            className="col-span-2 flex min-h-11 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
+            <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
             Compare with yesterday
           </button>
         ) : (
           <button
             type="button"
             onClick={() => navigate(date, "")}
-            className="col-span-2 flex min-h-11 items-center justify-center rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
+            <X className="h-4 w-4" aria-hidden="true" />
             Clear comparison ({compare})
           </button>
         )}
@@ -210,18 +233,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
               }}
               className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                className="h-3.5 w-3.5"
-                aria-hidden="true"
-              >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Add session
             </button>
           )}
@@ -255,8 +267,9 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                   setAdding(false);
                   if (created.localDate !== date) {
                     navigate(created.localDate, compare);
+                  } else {
+                    await loadData(dataKey, date, compare);
                   }
-                  setLoadedKey("");
                 } finally {
                   setBusy(false);
                 }
@@ -265,9 +278,10 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
           </div>
         )}
         {loading ? (
-          <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading sessions…
-          </p>
+          </div>
         ) : daySessions.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
             No study sessions on this date.
@@ -294,9 +308,14 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                           setError(body.error || "Failed to update session");
                           return;
                         }
+                        const updated = (await res.json()) as StudySession;
                         setError(undefined);
                         setEditingId(null);
-                        setLoadedKey("");
+                        if (updated.localDate !== date) {
+                          navigate(updated.localDate, compare);
+                        } else {
+                          await loadData(dataKey, date, compare);
+                        }
                       } finally {
                         setBusy(false);
                       }
@@ -333,18 +352,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                         onClick={() => setEditingId(s._id)}
                         className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-300 text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4.5 w-4.5"
-                          aria-hidden="true"
-                        >
-                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                        </svg>
+                        <Pencil className="h-4.5 w-4.5" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -352,20 +360,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                         onClick={() => setDeletingSession(s)}
                         className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 text-red-600 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4.5 w-4.5"
-                          aria-hidden="true"
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
+                        <Trash2 className="h-4.5 w-4.5" aria-hidden="true" />
                       </button>
                     </span>
                   ) : (
@@ -630,8 +625,9 @@ function AddSessionRow({
           type="button"
           onClick={handleSave}
           disabled={busy || previewDuration === null}
-          className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
         >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           {busy ? "Adding…" : "Add session"}
         </button>
       </div>
@@ -735,8 +731,9 @@ function EditSessionRow({
           type="button"
           onClick={handleSave}
           disabled={busy || previewDuration === null}
-          className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold text-white transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
         >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
           {busy ? "Saving…" : "Save changes"}
         </button>
       </div>
