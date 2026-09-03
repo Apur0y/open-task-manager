@@ -330,30 +330,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
         <div className="mt-4 text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
           {dailyProgressMessage(totalToday / 3600)}
         </div>
-
-        {record && recordDiff !== null && (
-          <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
-            {record.isNewRecord ? (
-              <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
-                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                New record! {formatDuration(totalToday)}
-              </span>
-            ) : recordDiff >= 0 ? (
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatDuration(recordDiff)} ahead of record
-              </span>
-            ) : (
-              <span className="font-semibold text-neutral-500 dark:text-neutral-400">
-                {formatDuration(-recordDiff)} behind record
-              </span>
-            )}
-            <span className="text-neutral-400 dark:text-neutral-500">
-              · best {formatDuration(record.total)} ({record.date.slice(5)})
-            </span>
-          </div>
-        )}
-
-        {schedulePassed && !scheduleFinished && (
+           {schedulePassed && !scheduleFinished && (
           <div className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
             {scheduleDiff >= 0 ? (
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
@@ -369,6 +346,30 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             </span>
           </div>
         )}
+
+        {record && recordDiff !== null && (
+          <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
+            {record.isNewRecord ? (
+              <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                New record! {formatDuration(totalToday)}
+              </span>
+            ) : recordDiff >= 0 ? (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {/* {formatDuration(recordDiff)} ahead of record */}
+              </span>
+            ) : (
+              <span className="font-semibold text-neutral-500 dark:text-neutral-400">
+                {/* {formatDuration(-recordDiff)} behind record */}
+              </span>
+            )}
+            <span className="text-neutral-400 dark:text-neutral-500">
+              Best: {formatDuration(record.total)} ({record.date.slice()})
+            </span>
+          </div>
+        )}
+
+     
         {scheduleFinished && (
           <div className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
             {scheduleDiff >= 0 ? (
