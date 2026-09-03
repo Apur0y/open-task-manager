@@ -13,11 +13,14 @@ import {
 import AddSessionForm from "./session-add-form";
 import {
   StudySession,
+  computeDayStats,
   cumulativeUpToMinute,
   dayCumulativeByHour,
   formatClock,
   formatDuration,
   formatTimeOfDay,
+  groupSessionsByDate,
+  lastNDates,
   localMinutesOfDay,
   todayString,
 } from "@/lib/types";
@@ -27,7 +30,35 @@ interface StudyClientProps {
   dbError?: string;
 }
 
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+function weekdayLetter(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return WEEKDAY_LETTERS[new Date(y, (m ?? 1) - 1, d ?? 1).getDay()];
+}
+
 const DAILY_TARGET_SECONDS = 12 * 3600;
+
+const SCHEDULE_BLOCKS: [number, number][] = [
+  [480, 600],   // 8:00 AM – 10:00 AM
+  [630, 780],   // 10:30 AM – 1:00 PM
+  [840, 900],   // 2:00 PM – 3:00 PM
+  [960, 1080],  // 4:00 PM – 6:00 PM
+  [1140, 1260], // 7:00 PM – 10:00 PM
+  [1290, 1440], // 10:30 PM – 12:00 AM
+];
+const SCHEDULE_TOTAL_SECONDS = SCHEDULE_BLOCKS.reduce(
+  (sum, [s, e]) => sum + (e - s) * 60,
+  0
+);
+function scheduleTargetAtMinute(minuteOfDay: number): number {
+  let acc = 0;
+  for (const [start, end] of SCHEDULE_BLOCKS) {
+    if (minuteOfDay <= start) break;
+    const overlap = Math.min(minuteOfDay, end) - start;
+    acc += overlap * 60;
+  }
+  return acc;
+}
 
 function dailyProgressMessage(hours: number): string {
   if (hours <= 0) return "Let's begin.";
@@ -47,6 +78,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | undefined>();
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
+  const [weeklySessions, setWeeklySessions] = useState<StudySession[]>([]);
   const timezone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -69,6 +101,24 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
         if (res.ok && !cancelled) setAllSessions(await res.json());
       } catch {
         // ignore; best-day comparison stays empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const dates = lastNDates(7);
+      const from = dates[0];
+      const to = dates[dates.length - 1];
+      try {
+        const res = await fetch(`/api/study?from=${from}&to=${to}`);
+        if (res.ok && !cancelled) setWeeklySessions(await res.json());
+      } catch {
+        // ignore
       }
     })();
     return () => {
@@ -192,6 +242,21 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
 
   const recordDiff = record ? totalToday - record.atNow : null;
 
+  const scheduleTarget = now !== null
+    ? scheduleTargetAtMinute(localMinutesOfDay(new Date(now).toISOString(), timezone))
+    : 0;
+  const scheduleDiff = totalToday - scheduleTarget;
+  const schedulePassed = now !== null && scheduleTarget > 0;
+  const scheduleFinished = scheduleTarget >= SCHEDULE_TOTAL_SECONDS;
+
+  const weeklyDays = useMemo(() => {
+    const grouped = groupSessionsByDate(weeklySessions);
+    return lastNDates(7).map((d) => computeDayStats(d, grouped.get(d) ?? []));
+  }, [weeklySessions]);
+
+  const weekTotal = weeklyDays.reduce((sum, d) => sum + d.totalSeconds, 0);
+  const maxWeeklySeconds = Math.max(...weeklyDays.map((d) => d.totalSeconds), 1);
+
   if (dbError) {
     return (
       <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
@@ -287,6 +352,36 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             </span>
           </div>
         )}
+
+        {schedulePassed && !scheduleFinished && (
+          <div className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
+            {scheduleDiff >= 0 ? (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {formatDuration(scheduleDiff)} ahead of schedule
+              </span>
+            ) : (
+              <span className="font-semibold text-red-600 dark:text-red-400">
+                {formatDuration(-scheduleDiff)} behind schedule
+              </span>
+            )}
+            <span className="text-neutral-400 dark:text-neutral-500">
+              · target {formatDuration(scheduleTarget)}
+            </span>
+          </div>
+        )}
+        {scheduleFinished && (
+          <div className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
+            {scheduleDiff >= 0 ? (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                All schedule blocks done · {formatDuration(scheduleDiff)} ahead
+              </span>
+            ) : (
+              <span className="font-semibold text-red-600 dark:text-red-400">
+                {formatDuration(-scheduleDiff)} behind schedule
+              </span>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-2 gap-3">
@@ -366,6 +461,70 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
           History &amp; statistics
           <ChevronRight className="h-4 w-4 text-neutral-400" aria-hidden="true" />
         </Link>
+      </section>
+
+      <section>
+        <div className="mb-2 flex items-baseline justify-between px-1">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Last 7 days
+          </h2>
+          <span className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+            Week:{" "}
+            <span className="font-bold text-neutral-800 dark:text-neutral-200">
+              {formatDuration(weekTotal)}
+            </span>
+          </span>
+        </div>
+        <div className="rounded-2xl border border-neutral-200/80 bg-surface p-4 pt-3">
+          <div className="flex h-48 items-end justify-between gap-2">
+            {weeklyDays.map((d) => {
+              const hasData = d.totalSeconds > 0;
+              const pct = hasData
+                ? Math.max(8, Math.round((d.totalSeconds / maxWeeklySeconds) * 100))
+                : 2;
+              const isToday = d.date === today;
+              return (
+                <div
+                  key={d.date}
+                  title={`${d.date}: ${formatDuration(d.totalSeconds)} (${d.sessionCount} sessions)`}
+                  className="flex h-full flex-1 flex-col items-center justify-end gap-1 "
+                >
+                  <span
+                    className={`text-[10px] font-bold tabular-nums ${
+                      hasData
+                        ? "text-neutral-800 dark:text-neutral-200"
+                        : "text-neutral-400 dark:text-neutral-600"
+                    }`}
+                  >
+                    {hasData ? formatDuration(d.totalSeconds) : "0h"}
+                  </span>
+                  <div
+                    className={`w-full rounded-md ${
+                      hasData
+                        ? isToday
+                          ? "bg-emerald-500"
+                          : "bg-emerald-400 dark:bg-emerald-600"
+                        : "bg-neutral-200 dark:bg-neutral-700"
+                    }`}
+                    style={{ height: `${pct}%` }}
+                  />
+                  <span
+                    className={`flex flex-col items-center leading-tight ${
+                      isToday
+                        ? "font-bold text-emerald-600 dark:text-emerald-400"
+                        : "text-neutral-500 dark:text-neutral-400"
+                    }`}
+                  >
+                    <span className="text-[10px]">{weekdayLetter(d.date)}</span>
+                    <span className="text-[9px] tabular-nums opacity-70">
+                      {d.date.slice(8)}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
       {showAdd && (
