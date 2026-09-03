@@ -24,6 +24,7 @@ export const metadata: Metadata = {
   applicationName: "Study Tracker",
   icons: {
     icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "48x48" },
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
     ],
