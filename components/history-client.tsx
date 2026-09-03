@@ -400,7 +400,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                   title={`${d.date}: ${formatDuration(d.totalSeconds)} (${d.sessionCount} sessions)`}
                   className="group flex h-full flex-1 cursor-pointer flex-col items-center justify-end gap-1"
                 >
-                  <span className="text-[10px] font-medium tabular-nums text-neutral-500 opacity-0 transition-opacity group-hover:opacity-100 dark:text-neutral-400">
+                  <span className="text-[10px] font-medium tabular-nums text-neutral-500 opacity-100 transition-opacity  dark:text-neutral-400">
                     {formatDuration(d.totalSeconds)}
                   </span>
                  
