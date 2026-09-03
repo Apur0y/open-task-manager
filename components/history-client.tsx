@@ -403,6 +403,7 @@ export default function HistoryClient({ fallbackDate }: HistoryClientProps) {
                   <span className="text-[10px] font-medium tabular-nums text-neutral-500 opacity-0 transition-opacity group-hover:opacity-100 dark:text-neutral-400">
                     {formatDuration(d.totalSeconds)}
                   </span>
+                 
                   <div
                     className={`w-full rounded-lg transition-colors ${
                       isSelected
