@@ -1,22 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Play,
-  Square,
-  Trash2,
   ChevronRight,
   BookOpen,
   AlertTriangle,
-  Loader2,
+  Plus,
+  X,
+  Trophy,
 } from "lucide-react";
-import ConfirmDialog from "./confirm-dialog";
+import AddSessionForm from "./session-add-form";
 import {
   StudySession,
+  cumulativeUpToMinute,
+  dayCumulativeByHour,
   formatClock,
   formatDuration,
   formatTimeOfDay,
+  localMinutesOfDay,
   todayString,
 } from "@/lib/types";
 
@@ -25,21 +27,30 @@ interface StudyClientProps {
   dbError?: string;
 }
 
-const LONG_SESSION_WARNING_SECONDS = 12 * 3600;
+const DAILY_TARGET_SECONDS = 12 * 3600;
+
+function dailyProgressMessage(hours: number): string {
+  if (hours <= 0) return "Let's begin.";
+  if (hours < 3) return "Let's begin.";
+  if (hours < 6) return "You're warming up.";
+  if (hours < 9) return "Halfway there! 🔥";
+  if (hours < 11) return "You're entering beast mode.";
+  if (hours < 12) return "ONE HOUR LEFT.";
+  return "TARGET DESTROYED 🏆";
+}
 
 export default function StudyClient({ initialActive, dbError }: StudyClientProps) {
   const [active, setActive] = useState<StudySession | null>(initialActive);
   const [todays, setTodays] = useState<StudySession[]>([]);
   const [now, setNow] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const timezone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-    []
-  );
+  const [showAdd, setShowAdd] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState<string | undefined>();
+  const [allSessions, setAllSessions] = useState<StudySession[]>([]);
+  const timezone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-  const loadToday = useCallback(async () => {
+  const loadToday = async () => {
     const d = todayString();
     try {
       const res = await fetch(`/api/study?from=${d}&to=${d}`);
@@ -47,6 +58,22 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
     } catch {
       // network hiccup; keep current list
     }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const d = todayString();
+      try {
+        const res = await fetch(`/api/study?from=1970-01-01&to=${d}`);
+        if (res.ok && !cancelled) setAllSessions(await res.json());
+      } catch {
+        // ignore; best-day comparison stays empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -95,61 +122,73 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
       )
     : 0;
 
-  const handleStart = async () => {
-    setBusy(true);
-    setError(undefined);
+  const handleAddSession = async (startAtIso: string, endAtIso: string) => {
+    setAddBusy(true);
+    setAddError(undefined);
     try {
       const res = await fetch("/api/study", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone }),
+        body: JSON.stringify({ timezone, startAt: startAtIso, endAt: endAtIso }),
       });
       const body = await res.json();
       if (res.status === 201) {
-        setActive(body as StudySession);
-      } else if (res.status === 409 && body.session) {
-        setActive(body.session as StudySession);
-      } else {
-        setError(body.error || "Failed to start session");
-      }
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleStop = async () => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      const res = await fetch("/api/study/active/stop", { method: "POST" });
-      if (res.ok) {
-        setActive(null);
+        setShowAdd(false);
         await loadToday();
       } else {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Failed to stop session");
+        setAddError(body.error || "Failed to add session");
       }
     } catch {
-      setError("Network error. Please try again.");
+      setAddError("Network error. Please try again.");
     } finally {
-      setBusy(false);
+      setAddBusy(false);
     }
   };
 
-  const handleDiscard = async () => {
-    if (!active) return;
-    setBusy(true);
-    try {
-      await fetch(`/api/study/${active._id}`, { method: "DELETE" });
-      setConfirmDiscard(false);
-      setActive(null);
-      await loadToday();
-    } finally {
-      setBusy(false);
+  const today = todayString();
+  const completed = todays.filter((s) => s.endAt !== null && s.durationSeconds !== null);
+  const finishedTotal = completed.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0);
+  const activeCountsToday = active ? active.localDate === today : false;
+  const totalToday = finishedTotal + (activeCountsToday ? elapsedSeconds : 0);
+
+  const record = useMemo(() => {
+    if (now === null) return null;
+    const grouped = new Map<string, StudySession[]>();
+    for (const s of allSessions) {
+      if (s.endAt === null || s.durationSeconds == null) continue;
+      if (s.localDate === today) continue;
+      const list = grouped.get(s.localDate);
+      if (list) list.push(s);
+      else grouped.set(s.localDate, [s]);
     }
-  };
+
+    let bestDate = "";
+    let bestTotal = 0;
+    const cumByDate = new Map<string, number[]>();
+    for (const [date, sessions] of grouped) {
+      const cum = dayCumulativeByHour(sessions, timezone);
+      cumByDate.set(date, cum);
+      const total = cum[23] ?? 0;
+      if (total > bestTotal) {
+        bestTotal = total;
+        bestDate = date;
+      }
+    }
+
+    if (!bestDate) return null;
+
+    const nowMin = localMinutesOfDay(new Date(now).toISOString(), timezone);
+    const bestCum = (cumByDate.get(bestDate) as number[]) ?? [];
+    const recordAtNow = cumulativeUpToMinute(bestCum, nowMin);
+    return {
+      date: bestDate,
+      total: bestTotal,
+      atNow: recordAtNow,
+      isNewRecord: totalToday >= bestTotal && bestTotal > 0,
+    };
+  }, [allSessions, today, timezone, now, totalToday]);
+
+  const recordDiff = record ? totalToday - record.atNow : null;
 
   if (dbError) {
     return (
@@ -160,98 +199,67 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
     );
   }
 
-  const today = todayString();
-  const completed = todays.filter((s) => s.endAt !== null && s.durationSeconds !== null);
-  const finishedTotal = completed.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0);
-  const activeCountsToday = active ? active.localDate === today : false;
-  const totalToday = finishedTotal + (activeCountsToday ? elapsedSeconds : 0);
-
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-neutral-200/80 bg-surface px-5 pb-5 pt-8 shadow-sm">
-        <div className="flex items-center justify-center gap-2">
-          <span
-            className={`inline-block h-2.5 w-2.5 rounded-full ${
-              active
-                ? "animate-pulse bg-emerald-500"
-                : "bg-neutral-300 dark:bg-neutral-700"
-            }`}
-          />
-          <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
-            {active ? "Studying" : "Ready"}
-          </p>
-        </div>
+      <section className="rounded-3xl border border-neutral-200/80 bg-surface px-5 py-4 shadow-sm">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+          Today
+        </h2>
 
         <div
-          className={`mt-4 text-center font-mono text-[3.75rem] font-bold leading-none tabular-nums sm:text-7xl ${
-            active
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-neutral-900 dark:text-neutral-100"
-          }`}
+          className="mt-3 flex items-center gap-px"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={DAILY_TARGET_SECONDS}
+          aria-valuenow={Math.min(totalToday, DAILY_TARGET_SECONDS)}
         >
-          {formatClock(elapsedSeconds)}
+          {Array.from({ length: 16 }, (_, i) => {
+            const filled = i < 16 * (Math.min(totalToday, DAILY_TARGET_SECONDS) / DAILY_TARGET_SECONDS);
+            const isActive = active && activeCountsToday;
+            return (
+              <span
+                key={i}
+                className={`h-5 flex-1 rounded-[3px] ${
+                  filled
+                    ? isActive
+                      ? "bg-emerald-500"
+                      : "bg-emerald-400"
+                    : "bg-neutral-200 dark:bg-neutral-800"
+                }`}
+              />
+            );
+          })}
         </div>
 
-        <p className="mt-4 min-h-5 text-center text-sm text-neutral-500 dark:text-neutral-400">
-          {active
-            ? `Started ${formatTimeOfDay(active.startAt, active.timezone)}${
-                active.localDate !== today ? ` · ${active.localDate}` : ""
-              }`
-            : "Time is counted on the server — safe to close the app"}
-        </p>
+        <div className="mt-2.5 flex items-baseline justify-between">
+          <span className="text-sm font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+            {(totalToday / 3600).toFixed(1)} / 12 hours
+          </span>
+          <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            {dailyProgressMessage(totalToday / 3600)}
+          </span>
+        </div>
 
-        {error && (
-          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-center text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {error}
-          </p>
-        )}
-
-        {!active ? (
-          <button
-            type="button"
-            onClick={handleStart}
-            disabled={busy}
-            className="mt-6 flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-bold text-white shadow-lg shadow-emerald-600/25 transition-transform duration-100 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-60"
-          >
-            {busy ? (
-              <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+        {record && recordDiff !== null && (
+          <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
+            {record.isNewRecord ? (
+              <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                New record! {formatDuration(totalToday)}
+              </span>
+            ) : recordDiff >= 0 ? (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {formatDuration(recordDiff)} ahead of record
+              </span>
             ) : (
-              <Play className="h-6 w-6" aria-hidden="true" />
+              <span className="font-semibold text-neutral-500 dark:text-neutral-400">
+                {formatDuration(-recordDiff)} behind record
+              </span>
             )}
-            {busy ? "Starting…" : "Start Studying"}
-          </button>
-        ) : (
-          <div className="mt-6 space-y-3">
-            <button
-              type="button"
-              onClick={handleStop}
-              disabled={busy}
-              className="flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 text-lg font-bold text-white shadow-lg shadow-red-600/25 transition-transform duration-100 hover:bg-red-500 active:scale-[0.97] disabled:opacity-60"
-            >
-              {busy ? (
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-              ) : (
-                <Square className="h-5 w-5" fill="currentColor" aria-hidden="true" />
-              )}
-              {busy ? "Stopping…" : "Stop & Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDiscard(true)}
-              disabled={busy}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-neutral-300 text-sm font-semibold text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              Discard session
-            </button>
+            <span className="text-neutral-400 dark:text-neutral-500">
+              · best {formatDuration(record.total)} ({record.date.slice(5)})
+            </span>
           </div>
-        )}
-
-        {elapsedSeconds > LONG_SESSION_WARNING_SECONDS && (
-          <p className="mt-4 text-center text-xs text-amber-600 dark:text-amber-400">
-            Running for a very long time — forgot to stop it earlier? Discard it
-            or fix the time in History.
-          </p>
         )}
       </section>
 
@@ -275,9 +283,22 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
       </section>
 
       <section>
-        <h2 className="mb-2 px-1 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          Today&apos;s sessions
-        </h2>
+        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Today&apos;s sessions
+          </h2>
+          <button
+            type="button"
+            onClick={() => {
+              setAddError(undefined);
+              setShowAdd(true);
+            }}
+            className="flex items-center gap-1 rounded-lg border border-emerald-500/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Add session
+          </button>
+        </div>
         {todays.length === 0 && !activeCountsToday ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
             <BookOpen className="h-8 w-8 text-neutral-300 dark:text-neutral-600" aria-hidden="true" />
@@ -321,15 +342,49 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
         </Link>
       </section>
 
-      {confirmDiscard && (
-        <ConfirmDialog
-          title="Discard this session?"
-          message="The running session will be deleted and none of its time will be recorded."
-          confirmLabel="Discard"
-          busy={busy}
-          onConfirm={handleDiscard}
-          onCancel={() => setConfirmDiscard(false)}
-        />
+      {showAdd && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
+          onClick={() => {
+            if (!addBusy) setShowAdd(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl dark:bg-neutral-900"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add a study session"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                Add session for today
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAdd(false)}
+                disabled={addBusy}
+                aria-label="Close"
+                className="rounded-full p-1.5 text-neutral-500 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            {addError && (
+              <p className="mb-3 rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                {addError}
+              </p>
+            )}
+
+            <AddSessionForm
+              date={today}
+              busy={addBusy}
+              onCancel={() => setShowAdd(false)}
+              onSave={handleAddSession}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
