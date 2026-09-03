@@ -166,9 +166,11 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
     let bestTotal = 0;
     const cumByDate = new Map<string, number[]>();
     for (const [date, sessions] of grouped) {
-      const cum = dayCumulativeByHour(sessions, timezone);
-      cumByDate.set(date, cum);
-      const total = cum[23] ?? 0;
+      const total = sessions.reduce(
+        (sum, s) => sum + (s.durationSeconds ?? 0),
+        0
+      );
+      cumByDate.set(date, dayCumulativeByHour(sessions, timezone));
       if (total > bestTotal) {
         bestTotal = total;
         bestDate = date;
