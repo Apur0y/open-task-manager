@@ -201,13 +201,18 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-neutral-200/80 bg-surface px-5 py-4 shadow-sm">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
-          Today
-        </h2>
+      <section className="rounded-3xl border border-neutral-200/80 bg-surface px-5 py-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-extrabold uppercase tracking-widest text-neutral-700 dark:text-neutral-200">
+            Today
+          </h2>
+          <span className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+            {(totalToday / 3600).toFixed(1)}h
+          </span>
+        </div>
 
         <div
-          className="mt-3 flex items-center gap-px"
+          className="mt-4 flex items-center gap-1"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={DAILY_TARGET_SECONDS}
@@ -219,7 +224,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             return (
               <span
                 key={i}
-                className={`h-5 flex-1 rounded-[3px] ${
+                className={`h-10 flex-1 rounded-[5px] ${
                   filled
                     ? isActive
                       ? "bg-emerald-500"
@@ -231,17 +236,36 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
           })}
         </div>
 
-        <div className="mt-2.5 flex items-baseline justify-between">
-          <span className="text-sm font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
-            {(totalToday / 3600).toFixed(1)} / 12 hours
-          </span>
-          <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-            {dailyProgressMessage(totalToday / 3600)}
-          </span>
+        <div className="mt-3 flex items-end justify-between">
+          <div>
+            <div className="text-4xl font-black tabular-nums text-neutral-900 dark:text-neutral-100">
+              {totalToday / 3600 >= 1
+                ? `${(totalToday / 3600).toFixed(1)}`
+                : `${Math.floor(totalToday / 60)}m`}
+            </div>
+            
+            <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              of 12 hour target
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+              {totalToday / 3600 >= 1
+                ? `${(12 - totalToday / 3600).toFixed(1)}h`
+                : `${(12 * 60 * 60 - totalToday) / 60}m`}
+            </div>
+            <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              to go
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+          {dailyProgressMessage(totalToday / 3600)}
         </div>
 
         {record && recordDiff !== null && (
-          <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
+          <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
             {record.isNewRecord ? (
               <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
                 <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
