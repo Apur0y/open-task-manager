@@ -16,7 +16,7 @@ const tabs: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/history", label: "History", icon: BarChart3 },
   { href: "/targets", label: "Targets", icon: Target },
   { href: "/news", label: "News", icon: Newspaper },
-  { href: "/test", label: "Test", icon: ClipboardCheck },
+  { href: "/test", label: "Dashboard", icon: ClipboardCheck },
 ];
 
 export default function BottomNav() {

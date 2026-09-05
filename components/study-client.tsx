@@ -24,6 +24,12 @@ import {
   localMinutesOfDay,
   todayString,
 } from "@/lib/types";
+import { ScheduleBlock } from "@/lib/schedule";
+import {
+  DEFAULT_SCHEDULE_BLOCKS,
+  scheduleTargetAtMinute,
+  scheduleTotalSeconds,
+} from "@/lib/schedule-utils";
 
 interface StudyClientProps {
   initialActive: StudySession | null;
@@ -36,38 +42,15 @@ function weekdayLetter(dateStr: string): string {
   return WEEKDAY_LETTERS[new Date(y, (m ?? 1) - 1, d ?? 1).getDay()];
 }
 
-const DAILY_TARGET_SECONDS = 12 * 3600;
-
-const SCHEDULE_BLOCKS: [number, number][] = [
-  [480, 600],   // 8:00 AM – 10:00 AM
-  [630, 780],   // 10:30 AM – 1:00 PM
-  [840, 900],   // 2:00 PM – 3:00 PM
-  [960, 1080],  // 4:00 PM – 6:00 PM
-  [1140, 1260], // 7:00 PM – 10:00 PM
-  [1290, 1440], // 10:30 PM – 12:00 AM
-];
-const SCHEDULE_TOTAL_SECONDS = SCHEDULE_BLOCKS.reduce(
-  (sum, [s, e]) => sum + (e - s) * 60,
-  0
-);
-function scheduleTargetAtMinute(minuteOfDay: number): number {
-  let acc = 0;
-  for (const [start, end] of SCHEDULE_BLOCKS) {
-    if (minuteOfDay <= start) break;
-    const overlap = Math.min(minuteOfDay, end) - start;
-    acc += overlap * 60;
-  }
-  return acc;
-}
-
-function dailyProgressMessage(hours: number): string {
+function dailyProgressMessage(hours: number, targetHours: number): string {
   if (hours <= 0) return "Let's begin.";
   if (hours < 3) return "Let's begin.";
   if (hours < 6) return "You're warming up.";
   if (hours < 9) return "Halfway there! 🔥";
   if (hours < 11) return "You're entering beast mode.";
-  if (hours < 12) return "ONE HOUR LEFT.";
-  return "TARGET DESTROYED 🏆";
+  if (hours >= targetHours) return "TARGET DESTROYED 🏆";
+  if (targetHours - hours < 1) return "ONE HOUR LEFT.";
+  return "You're entering beast mode.";
 }
 
 export default function StudyClient({ initialActive, dbError }: StudyClientProps) {
@@ -79,6 +62,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
   const [addError, setAddError] = useState<string | undefined>();
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   const [weeklySessions, setWeeklySessions] = useState<StudySession[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleBlock[]>([]);
   const timezone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -119,6 +103,21 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
         if (res.ok && !cancelled) setWeeklySessions(await res.json());
       } catch {
         // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/schedule");
+        if (res.ok && !cancelled) setSchedule(await res.json());
+      } catch {
+        // schedule stays empty
       }
     })();
     return () => {
@@ -242,12 +241,20 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
 
   const recordDiff = record ? totalToday - record.atNow : null;
 
+  const scheduleBlocks =
+    schedule.length > 0 ? schedule : DEFAULT_SCHEDULE_BLOCKS;
+  const dailyTargetSeconds = scheduleTotalSeconds(scheduleBlocks);
+  const SEGMENT_COUNT = Math.max(4, Math.ceil(dailyTargetSeconds / (45 * 60)));
+
   const scheduleTarget = now !== null
-    ? scheduleTargetAtMinute(localMinutesOfDay(new Date(now).toISOString(), timezone))
+    ? scheduleTargetAtMinute(
+        scheduleBlocks,
+        localMinutesOfDay(new Date(now).toISOString(), timezone)
+      )
     : 0;
   const scheduleDiff = totalToday - scheduleTarget;
   const schedulePassed = now !== null && scheduleTarget > 0;
-  const scheduleFinished = scheduleTarget >= SCHEDULE_TOTAL_SECONDS;
+  const scheduleFinished = scheduleTarget >= dailyTargetSeconds;
 
   const weeklyDays = useMemo(() => {
     const grouped = groupSessionsByDate(weeklySessions);
@@ -282,11 +289,11 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
           className="mt-4 flex items-center gap-1"
           role="progressbar"
           aria-valuemin={0}
-          aria-valuemax={DAILY_TARGET_SECONDS}
-          aria-valuenow={Math.min(totalToday, DAILY_TARGET_SECONDS)}
+          aria-valuemax={dailyTargetSeconds}
+          aria-valuenow={Math.min(totalToday, dailyTargetSeconds)}
         >
-          {Array.from({ length: 16 }, (_, i) => {
-            const filled = i < 16 * (Math.min(totalToday, DAILY_TARGET_SECONDS) / DAILY_TARGET_SECONDS);
+          {Array.from({ length: SEGMENT_COUNT }, (_, i) => {
+            const filled = i < SEGMENT_COUNT * (Math.min(totalToday, dailyTargetSeconds) / dailyTargetSeconds);
             const isActive = active && activeCountsToday;
             return (
               <span
@@ -312,14 +319,14 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
             </div>
             
             <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-              of 12 hour target
+              of {(dailyTargetSeconds / 3600).toFixed(1)} hour target
             </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
               {totalToday / 3600 >= 1
-                ? `${(12 - totalToday / 3600).toFixed(1)}h`
-                : `${(12 * 60 * 60 - totalToday) / 60}m`}
+                ? `${Math.max(0, (dailyTargetSeconds - totalToday) / 3600).toFixed(1)}h`
+                : `${Math.max(0, (dailyTargetSeconds - totalToday) / 60)}m`}
             </div>
             <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
               to go
@@ -328,7 +335,7 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
         </div>
 
         <div className="mt-4 text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-          {dailyProgressMessage(totalToday / 3600)}
+          {dailyProgressMessage(totalToday / 3600, dailyTargetSeconds / 3600)}
         </div>
            {schedulePassed && !scheduleFinished && (
           <div className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs dark:bg-neutral-800/60">
