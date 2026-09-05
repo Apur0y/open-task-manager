@@ -9,11 +9,11 @@ import {
   RotateCcw,
   Loader2,
   AlertTriangle,
-  CheckCircle2,
 } from "lucide-react";
 import type { ScheduleBlock } from "@/lib/schedule";
 import {
   DEFAULT_SCHEDULE_BLOCKS,
+  computeBlockProgress,
   minutesToTimeLabel,
   timeInputToMinute,
   scheduleTotalSeconds,
@@ -222,10 +222,41 @@ export default function DashboardClient({ dbError }: { dbError?: string }) {
   const scheduleDiff = totalToday - scheduleTarget;
   const scheduleDone = nowMin !== null && scheduleTarget >= totalSeconds;
 
-  const blockStatus = (b: ScheduleBlock): "upcoming" | "active" | "done" => {
+  const sortedBlocks = [...blocks].sort((a, b) => a.startMin - b.startMin);
+
+  const finishedIntervals: [number, number][] = todays
+    .filter((s) => s.endAt !== null && s.durationSeconds !== null)
+    .map((s) => {
+      const startMin = localMinutesOfDay(s.startAt, timezone);
+      const rawEndMin = localMinutesOfDay(s.endAt as string, timezone);
+      const endMin = rawEndMin <= startMin ? 24 * 60 : rawEndMin;
+      return [startMin, endMin] as [number, number];
+    })
+    .filter(([s, e]) => e > s);
+  const activeInterval: [number, number][] =
+    activeToday && active && nowMin !== null
+      ? (() => {
+          const startMin = localMinutesOfDay(active.startAt, timezone);
+          return nowMin > startMin
+            ? ([[startMin, nowMin]] as [number, number][])
+            : [];
+        })()
+      : [];
+  const studyIntervals = [...finishedIntervals, ...activeInterval];
+
+  const progress = computeBlockProgress(sortedBlocks, studyIntervals);
+  const doneTotalMinutes = progress.reduce(
+    (sum, p) => sum + p.completedMinutes,
+    0
+  );
+
+  const blockState = (
+    startMin: number,
+    endMin: number
+  ): "upcoming" | "active" | "done" => {
     if (nowMin === null) return "upcoming";
-    if (nowMin < b.startMin) return "upcoming";
-    if (nowMin >= b.endMin) return "done";
+    if (nowMin < startMin) return "upcoming";
+    if (nowMin >= endMin) return "done";
     return "active";
   };
 
@@ -261,17 +292,67 @@ export default function DashboardClient({ dbError }: { dbError?: string }) {
               </span>
             </div>
 
-            <div
-              className="relative mt-4 h-3 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800"
-              role="presentation"
-            >
-              {timelineMarker !== null && (
-                <span
-                  className="absolute top-0 h-full w-0.5 bg-neutral-500 dark:bg-neutral-300"
-                  style={{ left: timelineMarker }}
-                  aria-hidden="true"
-                />
-              )}
+            <div className="relative mt-4">
+              <div className="relative h-12 w-full overflow-hidden rounded-md bg-neutral-100 dark:bg-neutral-800/80">
+                {progress.length > 0 ? (
+                  <div
+                    className="flex h-full w-full items-stretch"
+                    style={{ gap: "2px" }}
+                  >
+                    {progress.map((p, i) => {
+                      const scheduled = p.endMin - p.startMin;
+                      const w = Math.max(1, (scheduled / 1440) * 100);
+                      const greenPct =
+                        scheduled > 0
+                          ? (p.completedMinutes / scheduled) * 100
+                          : 0;
+                      const state = blockState(p.startMin, p.endMin);
+                      return (
+                        <div
+                          key={sortedBlocks[i]._id}
+                          title={`${minutesToTimeLabel(p.startMin)} – ${minutesToTimeLabel(p.endMin)}: ${p.completedMinutes}m done · ${p.missedMinutes}m missed`}
+                          style={{ width: `${w}%` }}
+                          className={`relative min-w-0 overflow-hidden rounded-[3px] bg-red-400 dark:bg-red-600 ${
+                            state === "active"
+                              ? "ring-1 ring-emerald-400 dark:ring-emerald-300"
+                              : ""
+                          }`}
+                        >
+                          <span
+                            className="absolute inset-y-0 left-0 bg-emerald-500"
+                            style={{ width: `${Math.max(0, Math.min(100, greenPct))}%` }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="h-full w-full" />
+                )}
+                {timelineMarker !== null && (
+                  <span
+                    className="pointer-events-none absolute inset-y-0 z-10 w-px bg-neutral-900 dark:bg-neutral-100"
+                    style={{ left: timelineMarker }}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
+              <div className="flex items-center gap-4 text-neutral-500 dark:text-neutral-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" aria-hidden="true" />
+                  Studied
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-red-400 dark:bg-red-600" aria-hidden="true" />
+                  Missed
+                </span>
+              </div>
+              <span className="tabular-nums text-neutral-400 dark:text-neutral-500">
+                {minutesToTimeLabel(0)} – {minutesToTimeLabel(1439)}
+              </span>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-[11px] text-neutral-400 dark:text-neutral-500">
               <span>12:00 AM</span>
@@ -280,6 +361,10 @@ export default function DashboardClient({ dbError }: { dbError?: string }) {
               <span>6:00 PM</span>
               <span>11:59 PM</span>
             </div>
+            <p className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-500">
+              If you study outside your scheduled sessions, that time counts
+              toward the closest session and turns it green.
+            </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800/60">
@@ -323,44 +408,61 @@ export default function DashboardClient({ dbError }: { dbError?: string }) {
               </div>
             </div>
 
-            {nowMin !== null && blocks.length > 0 && (
+            {progress.length > 0 && (
               <div className="mt-4">
-                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  Schedule now
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                    Sessions
+                  </span>
+                  <span className="text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400">
+                    {formatDuration(doneTotalMinutes * 60)} finished
+                  </span>
                 </div>
-                <div className="space-y-1.5">
-                  {blocks.map((b) => {
-                    const status = blockStatus(b);
+                <ul className="space-y-1.5">
+                  {progress.map((p, i) => {
+                    const scheduled = p.endMin - p.startMin;
+                    const greenPct =
+                      scheduled > 0
+                        ? (p.completedMinutes / scheduled) * 100
+                        : 0;
+                    const state = blockState(p.startMin, p.endMin);
                     return (
-                      <div
-                        key={b._id}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs ${
-                          status === "active"
+                      <li
+                        key={sortedBlocks[i]._id}
+                        className={`rounded-lg border px-3 py-2 text-xs ${
+                          state === "active"
                             ? "border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950"
-                            : status === "done"
-                              ? "border-transparent bg-neutral-100 text-neutral-400 dark:bg-neutral-800/60 dark:text-neutral-500"
-                              : "border-transparent bg-neutral-100/60 text-neutral-500 dark:bg-neutral-800/40 dark:text-neutral-400"
+                            : "border-neutral-200/80 dark:border-neutral-800"
                         }`}
                       >
-                        <span className="font-semibold">
-                          {status === "done" ? "✓ " : ""}
-                          {minutesToTimeLabel(b.startMin)} –{" "}
-                          {minutesToTimeLabel(b.endMin)}
-                        </span>
-                        <span
-                          className={`font-bold tabular-nums ${
-                            status === "active"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : ""
-                          }`}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                            {minutesToTimeLabel(p.startMin)} –{" "}
+                            {minutesToTimeLabel(p.endMin)}
+                            {state === "active" && (
+                              <span className="ml-1 font-bold text-emerald-600 dark:text-emerald-400">
+                                · now
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-bold tabular-nums text-neutral-600 dark:text-neutral-300">
+                            {p.completedMinutes}m done · {p.missedMinutes}m
+                            missed
+                          </span>
+                        </div>
+                        <div
+                          className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-red-400/70 dark:bg-red-600/70"
+                          role="presentation"
                         >
-                          {formatDuration((b.endMin - b.startMin) * 60)}
-                          {status === "active" && " · now"}
-                        </span>
-                      </div>
+                          <div
+                            className="h-full rounded-full bg-emerald-500"
+                            style={{ width: `${Math.max(0, Math.min(100, greenPct))}%` }}
+                          />
+                        </div>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
             )}
           </section>
@@ -432,83 +534,20 @@ export default function DashboardClient({ dbError }: { dbError?: string }) {
                 {formatDuration(totalSeconds)}
               </span>
             </div>
-          </section>
 
-          {blocks.length > 0 && (
-            <section className="rounded-2xl border border-neutral-200/80 bg-surface p-4 dark:border-neutral-800">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  Same-day timeline
-                </h2>
-                <span className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
-                  {formatDuration(totalSeconds)} planned
-                </span>
-              </div>
-              <div
-                className="flex h-12 w-full items-stretch gap-1"
-                role="presentation"
-              >
-                {blocks.map((b) => {
-                  const w = Math.max(
-                    1,
-                    ((b.endMin - b.startMin) / 1440) * 100
-                  );
-                  const status = blockStatus(b);
-                  return (
-                    <div
-                      key={b._id}
-                      title={`${minutesToTimeLabel(b.startMin)} – ${minutesToTimeLabel(b.endMin)}`}
-                      style={{ width: `${w}%` }}
-                      className={`flex flex-col items-center justify-center rounded-md px-0.5 ${
-                        status === "active"
-                          ? "bg-emerald-500"
-                          : status === "done"
-                            ? "bg-emerald-800/40 dark:bg-emerald-400/40"
-                            : "bg-emerald-300 dark:bg-emerald-700"
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-[11px] text-neutral-400 dark:text-neutral-500">
-                <span>12:00 AM</span>
-                <span>6:00 AM</span>
-                <span>12:00 PM</span>
-                <span>6:00 PM</span>
-                <span>11:59 PM</span>
-              </div>
-
-              <ul className="mt-4 space-y-2">
-                {blocks.map((b) => (
+            {blocks.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {sortedBlocks.map((b) => (
                   <li
                     key={b._id}
-                    className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-3.5 py-2 ${
-                      blockStatus(b) === "active"
-                        ? "border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950"
-                        : "border-neutral-200/80 dark:border-neutral-800"
-                    }`}
+                    className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-neutral-200/80 px-3.5 py-2 dark:border-neutral-800"
                   >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                          blockStatus(b) === "active"
-                            ? "bg-emerald-500"
-                            : blockStatus(b) === "done"
-                              ? "bg-emerald-800 dark:bg-emerald-400"
-                              : "bg-neutral-300 dark:bg-neutral-600"
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <div>
-                        <div className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-                          {minutesToTimeLabel(b.startMin)} →{" "}
-                          {minutesToTimeLabel(b.endMin)}
-                        </div>
-                        <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                          {formatDuration((b.endMin - b.startMin) * 60)}
-                        </div>
-                      </div>
+                    <div className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                      {minutesToTimeLabel(b.startMin)} →{" "}
+                      {minutesToTimeLabel(b.endMin)}
+                      <span className="ml-2 text-[11px] font-normal text-neutral-500 dark:text-neutral-400">
+                        {formatDuration((b.endMin - b.startMin) * 60)}
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -522,8 +561,8 @@ export default function DashboardClient({ dbError }: { dbError?: string }) {
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
+            )}
+          </section>
         </>
       )}
     </div>
