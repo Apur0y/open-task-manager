@@ -6,6 +6,7 @@ import {
   ChevronRight,
   BookOpen,
   AlertTriangle,
+  Clock,
   Plus,
   X,
   Trophy,
@@ -27,6 +28,8 @@ import {
 import { ScheduleBlock } from "@/lib/schedule";
 import {
   DEFAULT_SCHEDULE_BLOCKS,
+  computeBlockProgress,
+  minutesToTimeLabel,
   scheduleTargetAtMinute,
   scheduleTotalSeconds,
 } from "@/lib/schedule-utils";
@@ -256,6 +259,53 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
   const schedulePassed = now !== null && scheduleTarget > 0;
   const scheduleFinished = scheduleTarget >= dailyTargetSeconds;
 
+  const nowMin = now !== null
+    ? localMinutesOfDay(new Date(now).toISOString(), timezone)
+    : null;
+
+  const sortedBlocks = [...schedule].sort((a, b) => a.startMin - b.startMin);
+
+  const finishedIntervals: [number, number][] = todays
+    .filter((s) => s.endAt !== null && s.durationSeconds !== null)
+    .map((s) => {
+      const startMin = localMinutesOfDay(s.startAt, timezone);
+      const rawEndMin = localMinutesOfDay(s.endAt as string, timezone);
+      const endMin = rawEndMin <= startMin ? 24 * 60 : rawEndMin;
+      return [startMin, endMin] as [number, number];
+    })
+    .filter(([s, e]) => e > s);
+  const activeInterval: [number, number][] =
+    activeCountsToday && active && nowMin !== null
+      ? (() => {
+          const startMin = localMinutesOfDay(active.startAt, timezone);
+          return nowMin > startMin
+            ? ([[startMin, nowMin]] as [number, number][])
+            : [];
+        })()
+      : [];
+  const studyIntervals = [...finishedIntervals, ...activeInterval];
+
+  const progress = computeBlockProgress(sortedBlocks, studyIntervals);
+  const doneTotalMinutes = progress.reduce(
+    (sum, p) => sum + p.completedMinutes,
+    0
+  );
+
+  const blockState = (
+    startMin: number,
+    endMin: number
+  ): "upcoming" | "active" | "done" => {
+    if (nowMin === null) return "upcoming";
+    if (nowMin < startMin) return "upcoming";
+    if (nowMin >= endMin) return "done";
+    return "active";
+  };
+
+  const timelineMarker =
+    nowMin !== null
+      ? `${(Math.min(1440, Math.max(0, nowMin)) / 1440) * 100}%`
+      : null;
+
   const weeklyDays = useMemo(() => {
     const grouped = groupSessionsByDate(weeklySessions);
     return lastNDates(7).map((d) => computeDayStats(d, grouped.get(d) ?? []));
@@ -275,6 +325,290 @@ export default function StudyClient({ initialActive, dbError }: StudyClientProps
 
   return (
     <div className="space-y-6">
+      <section className="rounded-2xl border border-neutral-200/80 bg-surface p-4 dark:border-neutral-800">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            Live tracking
+          </h2>
+          <span className="text-sm font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+            {now !== null ? minutesToTimeLabel(nowMin ?? 0) : "--:--"}
+          </span>
+        </div>
+
+        {(() => {
+          const activeIdx = progress.findIndex(
+            (p) => blockState(p.startMin, p.endMin) === "active"
+          );
+          let focusIdx = activeIdx;
+          let focusLabel: "active" | "last" = "active";
+
+          if (focusIdx === -1) {
+            const doneIndices: number[] = [];
+            for (let i = 0; i < progress.length; i++) {
+              if (blockState(progress[i].startMin, progress[i].endMin) === "done") {
+                doneIndices.push(i);
+              }
+            }
+            if (doneIndices.length > 0) {
+              focusIdx = doneIndices[doneIndices.length - 1];
+              focusLabel = "last";
+            }
+          }
+
+          const focusP = focusIdx !== -1 ? progress[focusIdx] : null;
+          const focusBlock = focusP ? sortedBlocks[focusIdx] : null;
+
+          if (focusP && focusBlock) {
+            const scheduled = focusP.endMin - focusP.startMin;
+            const greenPct =
+              scheduled > 0
+                ? (focusP.completedMinutes / scheduled) * 100
+                : 0;
+            const elapsedPct =
+              focusLabel === "active" && nowMin !== null
+                ? Math.max(
+                    0,
+                    Math.min(100, ((nowMin - focusP.startMin) / scheduled) * 100)
+                  )
+                : 100;
+
+            return (
+              <>
+                <div className="mt-4 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {minutesToTimeLabel(focusP.startMin)} – {minutesToTimeLabel(focusP.endMin)}
+                  </span>
+                  <span className="font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+                    {focusP.completedMinutes}m / {scheduled}m
+                  </span>
+                </div>
+                <div className="relative mt-2 h-10 w-full overflow-hidden rounded-md bg-neutral-100 dark:bg-neutral-800/80">
+                  {focusLabel === "active" ? (
+                    <>
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-[3px] bg-red-400 dark:bg-red-600"
+                        style={{ width: `${Math.max(0, Math.min(100, elapsedPct))}%` }}
+                      />
+                      <span
+                        className="absolute inset-y-0 left-0 rounded-[3px] bg-emerald-500"
+                        style={{ width: `${Math.max(0, Math.min(100, greenPct))}%` }}
+                      />
+                      <span
+                        className="pointer-events-none absolute inset-y-0 z-10 w-px bg-neutral-900 dark:bg-neutral-100"
+                        style={{ left: `${elapsedPct}%` }}
+                        aria-hidden="true"
+                      />
+                    </>
+                  ) : (
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-[3px] bg-emerald-500"
+                      style={{ width: `${Math.max(0, Math.min(100, greenPct))}%` }}
+                    />
+                  )}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px]">
+                  <div className="flex items-center gap-4 text-neutral-500 dark:text-neutral-400">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" aria-hidden="true" />
+                      Studied
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-[3px] bg-red-400 dark:bg-red-600" aria-hidden="true" />
+                      {focusLabel === "active" ? "Remaining" : "Missed"}
+                    </span>
+                  </div>
+                  <span className="tabular-nums text-neutral-400 dark:text-neutral-500">
+                    {minutesToTimeLabel(focusP.startMin)} – {minutesToTimeLabel(focusP.endMin)}
+                  </span>
+                </div>
+              </>
+            );
+          }
+
+          return (
+            <>
+              <div className="relative mt-4">
+                <div className="relative h-12 w-full overflow-hidden rounded-md bg-neutral-100 dark:bg-neutral-800/80">
+                  {progress.length > 0 ? (
+                    <div
+                      className="flex h-full w-full items-stretch"
+                      style={{ gap: "2px" }}
+                    >
+                      {progress.map((p, i) => {
+                        const scheduled = p.endMin - p.startMin;
+                        const w = Math.max(1, (scheduled / 1440) * 100);
+                        const greenPct =
+                          scheduled > 0
+                            ? (p.completedMinutes / scheduled) * 100
+                            : 0;
+                        return (
+                          <div
+                            key={sortedBlocks[i]._id}
+                            title={`${minutesToTimeLabel(p.startMin)} – ${minutesToTimeLabel(p.endMin)}: ${p.completedMinutes}m done · ${p.missedMinutes}m missed`}
+                            style={{ width: `${w}%` }}
+                            className="relative min-w-0 overflow-hidden rounded-[3px] bg-red-400 dark:bg-red-600"
+                          >
+                            <span
+                              className="absolute inset-y-0 left-0 bg-emerald-500"
+                              style={{ width: `${Math.max(0, Math.min(100, greenPct))}%` }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="h-full w-full" />
+                  )}
+                  {timelineMarker !== null && (
+                    <span
+                      className="pointer-events-none absolute inset-y-0 z-10 w-px bg-neutral-900 dark:bg-neutral-100"
+                      style={{ left: timelineMarker }}
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
+                <div className="flex items-center gap-4 text-neutral-500 dark:text-neutral-400">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" aria-hidden="true" />
+                    Studied
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-[3px] bg-red-400 dark:bg-red-600" aria-hidden="true" />
+                    Missed
+                  </span>
+                </div>
+                <span className="tabular-nums text-neutral-400 dark:text-neutral-500">
+                  {minutesToTimeLabel(0)} – {minutesToTimeLabel(1439)}
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between text-[11px] text-neutral-400 dark:text-neutral-500">
+                <span>12:00 AM</span>
+                <span>6:00 AM</span>
+                <span>12:00 PM</span>
+                <span>6:00 PM</span>
+                <span>11:59 PM</span>
+              </div>
+            </>
+          );
+        })()}
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800/60">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Studied today
+            </div>
+            <div className="mt-0.5 text-lg font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {formatDuration(totalToday)}
+            </div>
+          </div>
+          <div className="rounded-xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800/60">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Target today
+            </div>
+            <div className="mt-0.5 text-lg font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {formatDuration(dailyTargetSeconds)}
+            </div>
+          </div>
+          <div className="rounded-xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800/60">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              {scheduleFinished ? "Final" : "By now"}
+            </div>
+            <div className="mt-0.5 text-lg font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {formatDuration(scheduleTarget)}
+            </div>
+          </div>
+          <div className="rounded-xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800/60">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Pace
+            </div>
+            <div
+              className={`mt-0.5 text-lg font-bold tabular-nums ${
+                scheduleDiff >= 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {scheduleDiff >= 0 ? "+" : "\u2212"}
+              {formatDuration(Math.abs(scheduleDiff))}
+            </div>
+          </div>
+        </div>
+
+        {progress.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-1.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Sessions
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddError(undefined);
+                    setShowAdd(true);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-emerald-500/60 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                >
+                  <Plus className="h-3 w-3" aria-hidden="true" />
+                  Add session
+                </button>
+              </div>
+              <span className="text-[11px] tabular-nums text-neutral-500 dark:text-neutral-400">
+                {formatDuration(doneTotalMinutes * 60)} finished
+              </span>
+            </div>
+            <ul className="space-y-1.5">
+              {progress.map((p, i) => {
+                const scheduled = p.endMin - p.startMin;
+                const greenPct =
+                  scheduled > 0
+                    ? (p.completedMinutes / scheduled) * 100
+                    : 0;
+                const state = blockState(p.startMin, p.endMin);
+                return (
+                  <li
+                    key={sortedBlocks[i]._id}
+                    className={`rounded-lg border px-3 py-2 text-xs ${
+                      state === "active"
+                        ? "border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950"
+                        : "border-neutral-200/80 dark:border-neutral-800"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                        {minutesToTimeLabel(p.startMin)} –{" "}
+                        {minutesToTimeLabel(p.endMin)}
+                        {state === "active" && (
+                          <span className="ml-1 font-bold text-emerald-600 dark:text-emerald-400">
+                            · now
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-bold tabular-nums text-neutral-600 dark:text-neutral-300">
+                        {p.completedMinutes}m done · {p.missedMinutes}m
+                        missed
+                      </span>
+                    </div>
+                    <div
+                      className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-red-400/70 dark:bg-red-600/70"
+                      role="presentation"
+                    >
+                      <div
+                        className="h-full rounded-full bg-emerald-500"
+                        style={{ width: `${Math.max(0, Math.min(100, greenPct))}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </section>
+
       <section className="rounded-3xl border border-neutral-200/80 bg-surface px-5 py-6 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold uppercase tracking-widest text-neutral-700 dark:text-neutral-200">
